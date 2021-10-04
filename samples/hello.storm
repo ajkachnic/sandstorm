@@ -1,0 +1,8 @@
+import "std.io"
+import "std.log" as log
+
+func main() void {
+  let stdout = io.stdout()
+  stdout.write("hello world!")
+  log.debug("hello again!")
+}
