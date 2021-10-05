@@ -13,7 +13,7 @@ pub enum Source {
 impl Source {
     pub fn get(&self, cache: &FileCache) -> Rc<String> {
         match self {
-            Source::File(path) => cache.get(&path).unwrap().clone(),
+            Source::File(path) => cache.get(path).unwrap(),
             Source::Text(t) => t.clone(),
         }
     }

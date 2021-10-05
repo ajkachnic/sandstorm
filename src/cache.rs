@@ -15,11 +15,8 @@ impl FileCache {
             files: HashMap::new(),
         }
     }
-    pub fn get(&self, path: &PathBuf) -> Option<Rc<String>> {
-        match self.files.get(path) {
-            Some(f) => Some(f.clone()),
-            None => None,
-        }
+    pub fn get(&self, path: &Path) -> Option<Rc<String>> {
+        self.files.get(path).map(|f| f.clone())
     }
 
     /// Load a file if it isn't already in the cache.
@@ -31,8 +28,8 @@ impl FileCache {
         }
         let file = std::fs::read_to_string(path)?;
         let file = Rc::new(file);
-        self.files.insert(buf.to_path_buf(), file.clone());
+        self.files.insert(buf, file.clone());
 
-        return Ok(file);
+        Ok(file)
     }
 }

@@ -18,6 +18,9 @@ pub struct Spanned<T> {
     pub span: Span,
 }
 
+/// A module/program. Type signature subject to change
+pub type Program = Vec<Statement>;
+
 pub type Statement = Spanned<StatementKind>;
 #[derive(Debug, Clone)]
 pub enum StatementKind {
@@ -38,8 +41,8 @@ impl Default for StatementKind {
 #[derive(Debug, Clone, Default, TypedBuilder)]
 pub struct ImportStatement {
     #[builder(default, setter(into))]
-    path: String,
-    alias: Option<Identifier>,
+    pub path: String,
+    pub alias: Option<Identifier>,
 }
 
 impl From<ImportStatement> for StatementKind {
@@ -110,7 +113,7 @@ pub enum ExpressionKind {
         callee: Box<Expression>,
         args: Vec<Expression>,
     },
-    Integer(usize),
+    Integer(isize),
     Boolean(bool),
 }
 

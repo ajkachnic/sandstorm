@@ -25,10 +25,10 @@ impl TypeEnv {
             Some(t) => Some(t.clone()),
             None => {
                 if let Some(parent) = &self.parent {
-                    return parent.get_type(key);
+                    parent.get_type(key)
                     //return parent.get_type(key);
                 } else {
-                    return None;
+                    None
                 }
             }
         }

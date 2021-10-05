@@ -25,7 +25,7 @@ pub enum LexError {
 
 pub type LexResult<T> = Result<T, LexError>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TokenKind {
     LeftParen,
     RightParen,
@@ -57,7 +57,7 @@ pub enum TokenKind {
     Const,
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Operator {
     // Comparison
     Equal,
@@ -116,7 +116,7 @@ impl<'a> Lexer<'a> {
             self.consume();
             return true;
         }
-        return false;
+        false
     }
 
     pub fn next_token(&mut self) -> LexResult<SpannedToken> {
