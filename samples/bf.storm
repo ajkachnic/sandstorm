@@ -1,0 +1,25 @@
+import "std.io"
+
+func interpret(input string, stdin void) void! {
+  for ch in input {
+    switch ch {
+      '>' => sp += 1,
+      '<' => sp -= 1,
+      '+' => *sp += 1, 
+      '-' => *sp -= 1, 
+      '.' => try io.putCh(ch),
+      ',' => *sp = try stdin.getCh(),
+    }
+  }
+}
+
+let buf: [30000]u8
+let sp: *u8 = buf 
+
+
+func main() void {
+  let stdin = io.stdin()
+  let input = try stdin.readLine()
+
+  interpret(input, stdin)
+}
