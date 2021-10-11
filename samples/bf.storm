@@ -1,6 +1,6 @@
-import "std.io"
+import std.io
 
-func interpret(input string, stdin void) void! {
+func interpret(input string, stdin *Stdin) !void {
   for ch in input {
     switch ch {
       '>' => sp += 1,
@@ -8,7 +8,7 @@ func interpret(input string, stdin void) void! {
       '+' => *sp += 1, 
       '-' => *sp -= 1, 
       '.' => try io.putCh(ch),
-      ',' => *sp = try stdin.getCh(),
+      ',' => *sp = try stdin.getCh()
     }
   }
 }

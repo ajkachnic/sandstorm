@@ -1,10 +1,32 @@
 #![allow(dead_code)]
+use serde::{Deserialize, Serialize};
+use std::rc::Rc;
 use typed_builder::TypedBuilder;
 
+use crate::lex::{Operator, TokenKind};
+
 /// A generic type for name resolution.
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Reference<T, R> {
     raw: T,
     resolved: Option<R>,
+}
+
+impl<T, R> Reference<T, R> {
+    pub fn new(raw: T) -> Self {
+        Reference {
+            raw,
+            resolved: None,
+        }
+    }
+
+    pub fn resolve(&mut self, resolved: R) {
+        self.resolved = Some(resolved)
+    }
+
+    pub fn resolved(&self) -> bool {
+        self.resolved.is_some()
+    }
 }
 
 type Position = usize;
@@ -12,7 +34,7 @@ type Position = usize;
 /// A pair of [`Position`]s, used by basically every AST node
 pub type Span = (Position, Position);
 
-#[derive(Debug, Clone, Default, TypedBuilder, PartialEq)]
+#[derive(Debug, Clone, Default, Copy, TypedBuilder, PartialEq, Serialize, Deserialize)]
 pub struct Spanned<T> {
     pub node: T,
     pub span: Span,
@@ -30,6 +52,9 @@ pub enum StatementKind {
     Assign(AssignStatement),
     Return(Expression),
     Expression(Expression),
+    For(ForStatement),
+    Block(Vec<Statement>),
+    TypeAlias(TypeAliasStatement),
 }
 
 impl Default for StatementKind {
@@ -40,14 +65,27 @@ impl Default for StatementKind {
 
 #[derive(Debug, Clone, Default, TypedBuilder)]
 pub struct ImportStatement {
-    #[builder(default, setter(into))]
-    pub path: String,
+    pub path: ModulePath,
     pub alias: Option<Identifier>,
 }
 
 impl From<ImportStatement> for StatementKind {
     fn from(f: ImportStatement) -> Self {
         StatementKind::Import(f)
+    }
+}
+
+#[derive(Debug, Clone, Default, TypedBuilder)]
+pub struct ForStatement {
+    pub(crate) name: Identifier,
+    /// The collection that is being iterated through
+    pub(crate) target: Box<Expression>,
+    pub(crate) body: Vec<Statement>,
+}
+
+impl From<ForStatement> for StatementKind {
+    fn from(f: ForStatement) -> Self {
+        StatementKind::For(f)
     }
 }
 
@@ -65,12 +103,12 @@ impl From<FunctionStatement> for StatementKind {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, TypedBuilder)]
 pub struct DeclarationStatement {
     kind: DeclarationKind,
     name: Identifier,
     typ: Option<Type>,
-    value: Box<Expression>,
+    value: Option<Box<Expression>>,
 }
 
 impl From<DeclarationStatement> for StatementKind {
@@ -91,7 +129,7 @@ impl Default for DeclarationKind {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, TypedBuilder)]
 pub struct AssignStatement {
     pub(crate) name: Identifier,
     pub(crate) value: Box<Expression>,
@@ -106,6 +144,67 @@ impl From<AssignStatement> for StatementKind {
 pub type Expression = Spanned<ExpressionKind>;
 
 #[derive(Debug, Clone)]
+pub enum BinOp {
+    And,          // and
+    Or,           // or
+    Plus,         // +
+    Minus,        // -
+    Asterisk,     // *
+    Slash,        // /
+    Equal,        // ==
+    NotEqual,     // !=
+    Greater,      // >
+    GreaterEqual, // >=
+    Less,         // <
+    LessEqual,    // <=
+
+    PlusEqual,
+    MinusEqual,
+    AsteriskEqual,
+    SlashEqual,
+    Assign,
+
+    Dot,
+}
+
+impl From<TokenKind> for Option<BinOp> {
+    fn from(t: TokenKind) -> Self {
+        match t {
+            TokenKind::And => Some(BinOp::And),
+            TokenKind::Or => Some(BinOp::Or),
+            TokenKind::Dot => Some(BinOp::Dot),
+            TokenKind::Assign => Some(BinOp::Assign),
+            TokenKind::Operator(op) => Some(match op {
+                Operator::Plus => BinOp::Plus,
+                Operator::Minus => BinOp::Minus,
+                Operator::Asterisk => BinOp::Asterisk,
+                Operator::Slash => BinOp::Slash,
+
+                Operator::PlusEqual => BinOp::PlusEqual,
+                Operator::MinusEqual => BinOp::MinusEqual,
+                Operator::AsteriskEqual => BinOp::AsteriskEqual,
+                Operator::SlashEqual => BinOp::SlashEqual,
+
+                Operator::Equal => BinOp::Equal,
+                Operator::NotEqual => BinOp::NotEqual,
+                Operator::Greater => BinOp::Greater,
+                Operator::GreaterEqual => BinOp::GreaterEqual,
+                Operator::Less => BinOp::Less,
+                Operator::LessEqual => BinOp::LessEqual,
+            }),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum UnaryOp {
+    Not, // not
+    Deref,
+    Try,
+}
+
+#[derive(Debug, Clone)]
 pub enum ExpressionKind {
     // Member(Box<Expression>, Identifier),
     Identifier(Identifier),
@@ -115,12 +214,28 @@ pub enum ExpressionKind {
     },
     Integer(isize),
     Boolean(bool),
+    // TODO: Convert this into a struct instead of being inline
+    Switch {
+        cases: Vec<(Pattern, Statement)>,
+        target: Box<Expression>,
+    },
+    BinOp(Box<Expression>, BinOp, Box<Expression>),
+    UnaryOp(UnaryOp, Box<Expression>),
 }
 
 impl Default for ExpressionKind {
     fn default() -> Self {
         ExpressionKind::Boolean(true)
     }
+}
+
+pub type Pattern = Spanned<PatternKind>;
+#[derive(Debug, Clone)]
+pub enum PatternKind {
+    Char(char),
+    Integer(isize),
+    Boolean(bool),
+    String(String),
 }
 
 /// An identifier with an explicitly provided type.
@@ -134,20 +249,35 @@ pub struct TypedIdentifier {
     typ: Type,
 }
 
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct TypeAliasStatement {
+    name: Identifier,
+    typ: Type,
+}
+
 pub type Type = Spanned<TypeKind>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeKind {
-    Array(Box<Type>),
+    Array {
+        inner: Box<Type>,
+        size: Option<usize>,
+    },
     Int,
     Bool,
     Void,
+    String,
+    Char,
     Struct {
-        fields: Vec<(String, Type)>,
+        fields: Vec<(Identifier, Type)>,
     },
     Function {
         params: Vec<(Identifier, Type)>,
         return_type: Box<Type>,
     },
+    Nullable(Box<Type>),
+    Fallable(Box<Type>),
+    Pointer(Box<Type>),
+    Custom(Reference<Identifier, Rc<Type>>),
 }
 
 impl Default for TypeKind {
@@ -157,3 +287,4 @@ impl Default for TypeKind {
 }
 
 pub type Identifier = Spanned<String>;
+pub type ModulePath = Vec<Identifier>;

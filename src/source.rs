@@ -1,4 +1,4 @@
-use std::{path::PathBuf, rc::Rc};
+use std::{path::PathBuf, sync::Arc};
 
 use crate::cache::FileCache;
 
@@ -7,14 +7,19 @@ use crate::cache::FileCache;
 #[derive(Clone, Debug)]
 pub enum Source {
     File(PathBuf),
-    Text(Rc<String>),
+    Text(Arc<String>),
 }
 
 impl Source {
-    pub fn get(&self, cache: &FileCache) -> Rc<String> {
+    pub fn get(&self, cache: &FileCache) -> Arc<String> {
         match self {
             Source::File(path) => cache.get(path).unwrap(),
             Source::Text(t) => t.clone(),
         }
+    }
+
+    pub fn slice(&self, cache: &FileCache, slice: (usize, usize)) -> String {
+        let got = self.get(cache);
+        String::from(&got[slice.0..slice.1])
     }
 }

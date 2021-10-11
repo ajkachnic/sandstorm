@@ -1,0 +1,58 @@
+---
+source: src/lex.rs
+expression: tokens
+
+---
+- node: Func
+  span:
+    - 0
+    - 4
+- node: Identifier
+  span:
+    - 5
+    - 8
+- node: LeftParen
+  span:
+    - 8
+    - 9
+- node: RightParen
+  span:
+    - 9
+    - 10
+- node: Void
+  span:
+    - 11
+    - 15
+- node: LeftCurlyBrace
+  span:
+    - 16
+    - 17
+- node: Newline
+  span:
+    - 17
+    - 18
+- node: Return
+  span:
+    - 26
+    - 32
+- node: Number
+  span:
+    - 33
+    - 34
+- node: DoubleArrow
+  span:
+    - 35
+    - 37
+- node: Number
+  span:
+    - 38
+    - 39
+- node: Newline
+  span:
+    - 39
+    - 40
+- node: RightCurlyBrace
+  span:
+    - 44
+    - 45
+

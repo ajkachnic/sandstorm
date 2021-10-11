@@ -103,6 +103,9 @@ impl TypeChecker {
                 Some(t) => Ok(t),
                 None => Err(TypeError::UnresolvedIdentifier(ident.node)),
             },
+            ExpressionKind::Switch { .. } => todo!("implement switch checking"),
+            ExpressionKind::BinOp { .. } => todo!("implement infix"),
+            ExpressionKind::UnaryOp { .. } => todo!("implement unary"),
             ExpressionKind::Call { callee, args } => match self.check_expression(*callee)?.as_ref()
             {
                 TypeKind::Function {

@@ -8,12 +8,14 @@ mod source;
 use getopts::Options;
 use std::env;
 
+use miette::{IntoDiagnostic, Result};
+
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} FILE [options]", program);
     println!("{}", opts.usage(&brief))
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<()> {
     let mut file_cache = cache::FileCache::new();
 
     let mut args = env::args();
@@ -21,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = args.collect();
 
     let mut opts = Options::new();
-    let matches = opts.parse(args)?;
+    let matches = opts.parse(args).into_diagnostic()?;
 
     let file_path = if !matches.free.is_empty() {
         matches.free[0].clone()
@@ -30,10 +32,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     };
 
+    let file = source::Source::File((&file_path).into());
     let tokens = lex::Lexer::from_file(&mut file_cache, &file_path)?;
-    println!("{:?}", tokens);
 
-    let mut parser = parse::Parser::new(tokens);
+    for t in &tokens {
+        println!("{:?}", t);
+    }
+
+    let mut parser = parse::Parser::new(tokens, file, &mut file_cache);
     let program = parser.parse_program()?;
 
     println!("{:?}", program);

@@ -1,4 +1,5 @@
-use ariadne::{Label, Report, ReportKind};
+use miette::Diagnostic;
+use serde::{Deserialize, Serialize};
 use std::iter::Peekable;
 use std::str::Chars;
 use thiserror::Error;
@@ -11,10 +12,13 @@ use crate::{
 
 pub type SpannedToken = Spanned<TokenKind>;
 
-#[derive(Clone, Error, Debug)]
+#[derive(Clone, Error, Debug, Diagnostic)]
 pub enum LexError {
     #[error("Expected end of string. Check to make sure you closed all of your quotes")]
     ExpectedEndOfString { src: Source, bad: Span },
+
+    #[error("Expected end of char literal. Check to make sure you closed all of your quotes")]
+    ExpectedEndOfChar { src: Source, bad: Span },
 
     #[error("EOF")]
     EndOfFile,
@@ -25,7 +29,7 @@ pub enum LexError {
 
 pub type LexResult<T> = Result<T, LexError>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Copy, Serialize, Deserialize)]
 pub enum TokenKind {
     LeftParen,
     RightParen,
@@ -34,33 +38,55 @@ pub enum TokenKind {
     LeftCurlyBrace,
     RightCurlyBrace,
     Dot,
+    Colon,
     Assign,
+    Comma,
+    Bang,
+    Question,
     Operator(Operator),
+    DoubleArrow,
 
     Newline, // Ignored sometimes but useful in other cases
 
     // Literals
-    Int(isize),
-    Bool(bool),
-    String(String),
-    Identifier(String),
+    Number,
+    StringLiteral,
+    Char,
+    Identifier,
+    True,
+    False,
 
     // Keywords
-    Func,
-    Import,
+    And,
     As,
-    Void,
-    Return,
-    If,
-    Else,
-    Let,
+    /// The keyword bool, as in `bool`, not the value
+    Bool,
     Const,
+    Else,
+    For,
+    Func,
+    If,
+    Import,
+    In,
+    /// The keyword `int`, not a number
+    Int,
+    Let,
+    Nil,
+    Not,
+    Or,
+    Return,
+    String,
+    Switch,
+    Try,
+    Type,
+    Void,
 }
 
-#[derive(Clone, Debug, Copy, PartialEq)]
+#[derive(Clone, Debug, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Operator {
     // Comparison
     Equal,
+    NotEqual,
     Greater,
     GreaterEqual,
     Less,
@@ -70,24 +96,41 @@ pub enum Operator {
     Minus,
     Asterisk,
     Slash,
+
+    PlusEqual,
+    MinusEqual,
+    AsteriskEqual,
+    SlashEqual,
 }
 
 impl From<String> for TokenKind {
     fn from(str: String) -> Self {
         match str.as_str() {
+            "and" => TokenKind::And,
             "as" => TokenKind::As,
+            "bool" => TokenKind::Bool,
             "const" => TokenKind::Const,
             "else" => TokenKind::Else,
-            "false" => TokenKind::Bool(false),
+            "false" => TokenKind::False,
+            "for" => TokenKind::For,
             "func" => TokenKind::Func,
             "if" => TokenKind::If,
             "import" => TokenKind::Import,
+            "in" => TokenKind::In,
+            "int" => TokenKind::Int,
             "let" => TokenKind::Let,
+            "nil" => TokenKind::Nil,
+            "not" => TokenKind::Not,
+            "or" => TokenKind::Or,
             "return" => TokenKind::Return,
-            "true" => TokenKind::Bool(true),
+            "string" => TokenKind::String,
+            "switch" => TokenKind::Switch,
+            "true" => TokenKind::True,
+            "try" => TokenKind::Try,
+            "type" => TokenKind::Type,
             "void" => TokenKind::Void,
 
-            _ => TokenKind::Identifier(str),
+            _ => TokenKind::Identifier,
         }
     }
 }
@@ -130,12 +173,22 @@ impl<'a> Lexer<'a> {
                 '}' => TokenKind::RightCurlyBrace,
                 '[' => TokenKind::LeftSquareBracket,
                 ']' => TokenKind::RightSquareBracket,
+                ':' => TokenKind::Colon,
                 '.' => TokenKind::Dot,
+                ',' => TokenKind::Comma,
+                '?' => TokenKind::Question,
                 '>' => {
                     if self.peek_consume('=') {
                         TokenKind::Operator(Operator::GreaterEqual)
                     } else {
                         TokenKind::Operator(Operator::Greater)
+                    }
+                }
+                '!' => {
+                    if self.peek_consume('=') {
+                        TokenKind::Operator(Operator::NotEqual)
+                    } else {
+                        TokenKind::Bang
                     }
                 }
                 '<' => {
@@ -148,17 +201,38 @@ impl<'a> Lexer<'a> {
                 '=' => {
                     if self.peek_consume('=') {
                         TokenKind::Operator(Operator::Equal)
+                    } else if self.peek_consume('>') {
+                        TokenKind::DoubleArrow
                     } else {
                         TokenKind::Assign
                     }
                 }
-                '+' => TokenKind::Operator(Operator::Plus),
-                '-' => TokenKind::Operator(Operator::Minus),
+                '+' => {
+                    if self.peek_consume('=') {
+                        TokenKind::Operator(Operator::PlusEqual)
+                    } else {
+                        TokenKind::Operator(Operator::Plus)
+                    }
+                }
+                '-' => {
+                    if self.peek_consume('=') {
+                        TokenKind::Operator(Operator::MinusEqual)
+                    } else {
+                        match self.peek() {
+                            Some('0'..='9') => {
+                                self.consume();
+                                self.lex_number()
+                            }
+                            _ => TokenKind::Operator(Operator::Minus),
+                        }
+                    }
+                }
                 '*' => TokenKind::Operator(Operator::Asterisk),
                 '/' => TokenKind::Operator(Operator::Slash),
                 '\n' => TokenKind::Newline,
                 'a'..='z' | 'A'..='Z' => self.lex_ident(ch),
-                '0'..='9' => self.lex_number(ch),
+                '0'..='9' => self.lex_number(),
+                '\'' => self.lex_char()?,
                 '"' => self.lex_string()?,
                 ch => return Err(LexError::UnexpectedCharacter { ch }),
             };
@@ -188,30 +262,47 @@ impl<'a> Lexer<'a> {
     }
 
     // Currently only supports integers
-    fn lex_number(&mut self, ch: char) -> TokenKind {
-        let mut n = String::from(ch);
+    fn lex_number(&mut self) -> TokenKind {
         while let Some(ch) = self.peek() {
             match ch {
-                '0'..='9' => n.push(*ch),
+                '0'..='9' => {
+                    self.consume();
+                }
                 _ => break,
             }
-            self.consume();
         }
 
-        TokenKind::Int(n.parse().unwrap())
+        TokenKind::Number
     }
 
     fn lex_string(&mut self) -> LexResult<TokenKind> {
-        let mut str = String::new();
         let start = self.pos;
         while let Some(ch) = self.consume() {
             if ch == '"' {
-                return Ok(TokenKind::String(str));
+                return Ok(TokenKind::StringLiteral);
             }
-            str.push(ch)
         }
 
         Err(LexError::ExpectedEndOfString {
+            bad: (start, self.pos - start),
+            src: self.src.clone(),
+        })
+    }
+
+    fn lex_char(&mut self) -> LexResult<TokenKind> {
+        let start = self.pos;
+        // TODO: Unicode support
+        if let Some(ch) = self.consume() {
+            if ch == '\'' {
+                return Ok(TokenKind::Char);
+            }
+        }
+
+        if self.consume() == Some('\'') {
+            return Ok(TokenKind::Char);
+        }
+
+        Err(LexError::ExpectedEndOfChar {
             bad: (start, self.pos - start),
             src: self.src.clone(),
         })
@@ -271,8 +362,19 @@ impl<'a> From<&'a str> for Lexer<'a> {
     fn from(source: &'a str) -> Self {
         Lexer {
             iter: source.chars().peekable(),
-            src: Source::Text(std::rc::Rc::new(source.to_string())),
+            src: Source::Text(std::sync::Arc::new(source.to_string())),
             pos: 0,
         }
     }
+}
+
+#[test]
+fn test_lex() {
+    let mut lexer: Lexer = "func fib() void {
+        return 1 => 2
+    }"
+    .into();
+
+    let tokens = lexer.tokens().unwrap();
+    insta::assert_yaml_snapshot!(tokens);
 }
