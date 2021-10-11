@@ -6,7 +6,7 @@ use typed_builder::TypedBuilder;
 use crate::lex::{Operator, TokenKind};
 
 /// A generic type for name resolution.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Reference<T, R> {
     raw: T,
     resolved: Option<R>,
@@ -40,11 +40,23 @@ pub struct Spanned<T> {
     pub span: Span,
 }
 
+impl<T> Spanned<T> {
+    pub fn map<N, F>(self, func: F) -> Spanned<N>
+    where
+        F: Fn(T) -> N,
+    {
+        Spanned {
+            node: func(self.node),
+            span: self.span,
+        }
+    }
+}
+
 /// A module/program. Type signature subject to change
 pub type Program = Vec<Statement>;
 
 pub type Statement = Spanned<StatementKind>;
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StatementKind {
     Import(ImportStatement),
     Function(FunctionStatement),
@@ -63,7 +75,7 @@ impl Default for StatementKind {
     }
 }
 
-#[derive(Debug, Clone, Default, TypedBuilder)]
+#[derive(Debug, Clone, Default, TypedBuilder, Serialize, Deserialize)]
 pub struct ImportStatement {
     pub path: ModulePath,
     pub alias: Option<Identifier>,
@@ -75,7 +87,7 @@ impl From<ImportStatement> for StatementKind {
     }
 }
 
-#[derive(Debug, Clone, Default, TypedBuilder)]
+#[derive(Debug, Clone, Default, TypedBuilder, Serialize, Deserialize)]
 pub struct ForStatement {
     pub(crate) name: Identifier,
     /// The collection that is being iterated through
@@ -89,7 +101,7 @@ impl From<ForStatement> for StatementKind {
     }
 }
 
-#[derive(Debug, Clone, Default, TypedBuilder)]
+#[derive(Debug, Clone, Default, TypedBuilder, Serialize, Deserialize)]
 pub struct FunctionStatement {
     body: Vec<Statement>,
     params: Vec<(Identifier, Type)>,
@@ -103,7 +115,7 @@ impl From<FunctionStatement> for StatementKind {
     }
 }
 
-#[derive(Debug, Clone, Default, TypedBuilder)]
+#[derive(Debug, Clone, Default, TypedBuilder, Serialize, Deserialize)]
 pub struct DeclarationStatement {
     kind: DeclarationKind,
     name: Identifier,
@@ -117,7 +129,7 @@ impl From<DeclarationStatement> for StatementKind {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DeclarationKind {
     Let,
     Const,
@@ -129,7 +141,7 @@ impl Default for DeclarationKind {
     }
 }
 
-#[derive(Debug, Clone, TypedBuilder)]
+#[derive(Debug, Clone, TypedBuilder, Serialize, Deserialize)]
 pub struct AssignStatement {
     pub(crate) name: Identifier,
     pub(crate) value: Box<Expression>,
@@ -143,7 +155,7 @@ impl From<AssignStatement> for StatementKind {
 
 pub type Expression = Spanned<ExpressionKind>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BinOp {
     And,          // and
     Or,           // or
@@ -197,14 +209,14 @@ impl From<TokenKind> for Option<BinOp> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum UnaryOp {
     Not, // not
     Deref,
     Try,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExpressionKind {
     // Member(Box<Expression>, Identifier),
     Identifier(Identifier),
@@ -212,8 +224,15 @@ pub enum ExpressionKind {
         callee: Box<Expression>,
         args: Vec<Expression>,
     },
+    If {
+        cond: Box<Expression>,
+        then: Vec<Statement>,
+        otherwise: Option<Vec<Statement>>,
+    },
     Integer(isize),
     Boolean(bool),
+    Character(char),
+    String(String),
     // TODO: Convert this into a struct instead of being inline
     Switch {
         cases: Vec<(Pattern, Statement)>,
@@ -230,7 +249,7 @@ impl Default for ExpressionKind {
 }
 
 pub type Pattern = Spanned<PatternKind>;
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PatternKind {
     Char(char),
     Integer(isize),
@@ -240,7 +259,7 @@ pub enum PatternKind {
 
 /// An identifier with an explicitly provided type.
 /// A common example is for parameters of a function
-#[derive(Debug, Clone, Default, TypedBuilder)]
+#[derive(Debug, Clone, Default, TypedBuilder, Serialize, Deserialize)]
 pub struct TypedIdentifier {
     /// The name of the value
     #[builder(default)]
@@ -249,14 +268,14 @@ pub struct TypedIdentifier {
     typ: Type,
 }
 
-#[derive(Debug, Clone, TypedBuilder)]
+#[derive(Debug, Clone, TypedBuilder, Serialize, Deserialize)]
 pub struct TypeAliasStatement {
     name: Identifier,
     typ: Type,
 }
 
 pub type Type = Spanned<TypeKind>;
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TypeKind {
     Array {
         inner: Box<Type>,
@@ -288,3 +307,6 @@ impl Default for TypeKind {
 
 pub type Identifier = Spanned<String>;
 pub type ModulePath = Vec<Identifier>;
+
+#[derive(Deserialize, Serialize)]
+pub struct A(Rc<()>);

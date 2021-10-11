@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 getopts = "0.2.21"
 miette = { version = "3.2.0", features = ["fancy"] }
-serde = { version = "1.0.130", features = [ "derive" ] }
+serde = { version = "1.0.130", features = [ "derive", "rc" ] }
 thiserror = "1.0.29"
 typed-builder = "0.9.1"
 

@@ -39,6 +39,7 @@ pub enum TokenKind {
     RightCurlyBrace,
     Dot,
     Colon,
+    Semicolon, // Rarely used explicitly, usually infered
     Assign,
     Comma,
     Bang,
@@ -46,12 +47,10 @@ pub enum TokenKind {
     Operator(Operator),
     DoubleArrow,
 
-    Newline, // Ignored sometimes but useful in other cases
-
     // Literals
-    Number,
+    NumberLiteral,
     StringLiteral,
-    Char,
+    CharLiteral,
     Identifier,
     True,
     False,
@@ -162,7 +161,7 @@ impl<'a> Lexer<'a> {
         false
     }
 
-    pub fn next_token(&mut self) -> LexResult<SpannedToken> {
+    fn next_token(&mut self) -> LexResult<SpannedToken> {
         self.skip_whitespace();
         let initial_pos = self.pos;
         if let Some(ch) = self.consume() {
@@ -229,7 +228,6 @@ impl<'a> Lexer<'a> {
                 }
                 '*' => TokenKind::Operator(Operator::Asterisk),
                 '/' => TokenKind::Operator(Operator::Slash),
-                '\n' => TokenKind::Newline,
                 'a'..='z' | 'A'..='Z' => self.lex_ident(ch),
                 '0'..='9' => self.lex_number(),
                 '\'' => self.lex_char()?,
@@ -272,7 +270,7 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        TokenKind::Number
+        TokenKind::NumberLiteral
     }
 
     fn lex_string(&mut self) -> LexResult<TokenKind> {
@@ -294,12 +292,12 @@ impl<'a> Lexer<'a> {
         // TODO: Unicode support
         if let Some(ch) = self.consume() {
             if ch == '\'' {
-                return Ok(TokenKind::Char);
+                return Ok(TokenKind::CharLiteral);
             }
         }
 
         if self.consume() == Some('\'') {
-            return Ok(TokenKind::Char);
+            return Ok(TokenKind::CharLiteral);
         }
 
         Err(LexError::ExpectedEndOfChar {
@@ -308,13 +306,14 @@ impl<'a> Lexer<'a> {
         })
     }
 
-    fn skip_whitespace(&mut self) {
+    fn skip_whitespace(&mut self) -> Option<TokenKind> {
         while let Some(ch) = self.peek() {
             match ch {
-                ' ' | '\t' | '\r' => self.consume(),
+                ' ' | '\t' | '\r' | '\n' => self.consume(),
                 _ => break,
             };
         }
+        None
     }
 
     pub fn tokens(&mut self) -> LexResult<Vec<SpannedToken>> {
@@ -322,7 +321,29 @@ impl<'a> Lexer<'a> {
 
         loop {
             match self.next_token() {
-                Ok(tok) => toks.push(tok),
+                Ok(tok) => {
+                    toks.push(tok);
+                    if self.peek() == Some(&'\n')
+                        && matches!(
+                            tok.node,
+                            TokenKind::Identifier
+                                | TokenKind::NumberLiteral
+                                | TokenKind::CharLiteral
+                                | TokenKind::StringLiteral
+                                | TokenKind::Return
+                                | TokenKind::RightParen
+                                | TokenKind::RightSquareBracket
+                                | TokenKind::RightCurlyBrace
+                        )
+                    {
+                        toks.push(
+                            Spanned::builder()
+                                .node(TokenKind::Semicolon)
+                                .span((self.pos, self.pos + 1))
+                                .build(),
+                        );
+                    }
+                }
                 Err(e) => {
                     if matches!(e, LexError::EndOfFile) {
                         return Ok(toks);

@@ -3,11 +3,11 @@ import std.io
 func interpret(input string, stdin *Stdin) !void {
   for ch in input {
     switch ch {
-      '>' => sp += 1,
-      '<' => sp -= 1,
-      '+' => *sp += 1, 
-      '-' => *sp -= 1, 
-      '.' => try io.putCh(ch),
+      '>' => sp += 1
+      '<' => sp -= 1
+      '+' => *sp += 1
+      '-' => *sp -= 1
+      '.' => try io.putCh(ch)
       ',' => *sp = try stdin.getCh()
     }
   }

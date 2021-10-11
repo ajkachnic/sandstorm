@@ -1,9 +1,9 @@
-import "std.io"
-import "std.convert"
-import "std.log" as log
+import std.io
+import std.convert
+import std.log as log
 
 func fib(n int) void {
-  if n < 2 {
+  if n == 0 or n == 1 {
     return n
   } else {
     return fib(n - 1) + fib(n - 2)

@@ -1,0 +1,40 @@
+---
+source: tests/parser.rs
+expression: program
+
+---
+- node:
+    Import:
+      path:
+        - node: std
+          span:
+            - 7
+            - 10
+      alias:
+        node: io
+        span:
+          - 14
+          - 16
+  span:
+    - 0
+    - 17
+- node:
+    Import:
+      path:
+        - node: std
+          span:
+            - 24
+            - 27
+        - node: mem
+          span:
+            - 28
+            - 31
+        - node: free
+          span:
+            - 32
+            - 36
+      alias: ~
+  span:
+    - 17
+    - 0
+

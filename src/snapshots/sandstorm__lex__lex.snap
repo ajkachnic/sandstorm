@@ -27,15 +27,11 @@ expression: tokens
   span:
     - 16
     - 17
-- node: Newline
-  span:
-    - 17
-    - 18
 - node: Return
   span:
     - 26
     - 32
-- node: Number
+- node: NumberLiteral
   span:
     - 33
     - 34
@@ -43,11 +39,11 @@ expression: tokens
   span:
     - 35
     - 37
-- node: Number
+- node: NumberLiteral
   span:
     - 38
     - 39
-- node: Newline
+- node: Semicolon
   span:
     - 39
     - 40

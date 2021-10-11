@@ -99,12 +99,15 @@ impl TypeChecker {
         match expr.node {
             ExpressionKind::Integer(_) => Ok(Rc::new(TypeKind::Int)),
             ExpressionKind::Boolean(_) => Ok(Rc::new(TypeKind::Bool)),
+            ExpressionKind::String(_) => Ok(Rc::new(TypeKind::String)),
+            ExpressionKind::Character(_) => Ok(Rc::new(TypeKind::Char)),
             ExpressionKind::Identifier(ident) => match self.env.get_type(&ident.node) {
                 Some(t) => Ok(t),
                 None => Err(TypeError::UnresolvedIdentifier(ident.node)),
             },
             ExpressionKind::Switch { .. } => todo!("implement switch checking"),
             ExpressionKind::BinOp { .. } => todo!("implement infix"),
+            ExpressionKind::If { .. } => todo!("implement if"),
             ExpressionKind::UnaryOp { .. } => todo!("implement unary"),
             ExpressionKind::Call { callee, args } => match self.check_expression(*callee)?.as_ref()
             {

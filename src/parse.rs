@@ -31,6 +31,10 @@ impl From<TokenKind> for Precedence {
             TokenKind::LeftParen => Precedence::CallMember,
             // TODO: Make assignment right associative
             TokenKind::Assign => Precedence::Assignment,
+
+            TokenKind::And => Precedence::Logical,
+            TokenKind::Or => Precedence::Logical,
+
             TokenKind::Operator(op) => match op {
                 Operator::Asterisk => Precedence::Multiplicative,
                 Operator::Slash => Precedence::Multiplicative,
@@ -127,6 +131,20 @@ pub enum ParseError {
 
         size: isize,
     },
+    #[error("While parsing an expression, we came upon an unsupported prefix: {tok:?}")]
+    #[diagnostic(
+        code("sandstorm.parse.unsupported_prefix"),
+        help("Check the surrounding area in your code."),
+        help("Consider opening an issue on how we can improve this error message")
+    )]
+    UnsupportedPrefix {
+        #[label("This bit here")]
+        span: Span,
+        #[source_code]
+        src: std::sync::Arc<String>,
+
+        tok: TokenKind,
+    },
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;
@@ -166,9 +184,6 @@ impl<'a> Parser<'a> {
 
     fn advance(&mut self) {
         self._advance();
-        while let Some(TokenKind::Newline) = self.current.map(|n| n.node) {
-            self._advance();
-        }
     }
 
     fn _advance(&mut self) {
@@ -178,6 +193,13 @@ impl<'a> Parser<'a> {
         if self.pos >= self.tokens.len() {
             self.eof = true;
         }
+    }
+
+    fn skip_semi(&mut self) {
+        while self.current_is(TokenKind::Semicolon) {
+            self.advance();
+        }
+        println!("skipped semis, next is {:?}", self.current);
     }
 
     fn peek_is(&self, check: TokenKind) -> bool {
@@ -231,7 +253,8 @@ impl<'a> Parser<'a> {
     pub fn parse_program(&mut self) -> ParseResult<Program> {
         let mut program = Vec::new();
         while !self.eof {
-            program.push(self.parse_statement()?)
+            program.push(self.parse_statement()?);
+            self.skip_semi();
         }
         Ok(program)
     }
@@ -245,6 +268,7 @@ impl<'a> Parser<'a> {
                 StatementKind::Declaration,
                 self.split(start),
             ),
+            TokenKind::Return => self.parse_return_statement(),
             TokenKind::Import => Self::convert_statement(
                 self.parse_import_statement(),
                 StatementKind::Import,
@@ -272,10 +296,6 @@ impl<'a> Parser<'a> {
             ),
         };
 
-        while self.current_is(TokenKind::Newline) {
-            self.advance();
-        }
-
         stmt
     }
 
@@ -299,6 +319,8 @@ impl<'a> Parser<'a> {
         }
 
         self.expect(TokenKind::RightCurlyBrace)?;
+
+        self.skip_semi();
 
         Ok(body)
     }
@@ -366,12 +388,12 @@ impl<'a> Parser<'a> {
         if self.current_is(TokenKind::As) {
             self.advance();
             let ident = self.parse_identifier()?;
-            self.advance();
             return Ok(ImportStatement {
                 path,
                 alias: Some(ident),
             });
         }
+
         Ok(ImportStatement { path, alias: None })
     }
 
@@ -384,10 +406,22 @@ impl<'a> Parser<'a> {
         Ok(TypeAliasStatement::builder().name(name).typ(typ).build())
     }
 
+    fn parse_return_statement(&mut self) -> ParseResult<Statement> {
+        let start = self.span();
+        self.expect(TokenKind::Return)?;
+        let e = self.parse_expression()?;
+
+        Ok(Statement::builder()
+            .node(StatementKind::Return(e))
+            .span((start.0, self.span().1))
+            .build())
+    }
+
     fn parse_declaration_statement(
         &mut self,
         kind: DeclarationKind,
     ) -> ParseResult<DeclarationStatement> {
+        println!("parsing decl");
         self.advance();
         let name = self.parse_identifier()?;
         let mut typ = None;
@@ -420,9 +454,9 @@ impl<'a> Parser<'a> {
         let mut left = self.parse_prefix()?;
 
         while pred < self.precedence() {
-            println!("{:?}", self.precedence());
             left = self.parse_infix_expression(left)?;
         }
+        self.skip_semi();
 
         Ok(left)
     }
@@ -430,12 +464,20 @@ impl<'a> Parser<'a> {
     fn parse_prefix(&mut self) -> ParseResult<Expression> {
         let start = self.span();
         let kind = match self.current.unwrap().node {
-            TokenKind::Number => self.parse_number()?,
-            TokenKind::True => ExpressionKind::Boolean(true),
-            TokenKind::False => ExpressionKind::Boolean(false),
+            TokenKind::NumberLiteral => self.parse_number()?,
+            TokenKind::StringLiteral => ExpressionKind::String(self.parse_string()?.node),
+            TokenKind::True => {
+                self.advance();
+                ExpressionKind::Boolean(true)
+            }
+            TokenKind::False => {
+                self.advance();
+                ExpressionKind::Boolean(false)
+            }
             TokenKind::Identifier => ExpressionKind::Identifier(self.parse_identifier()?),
-            TokenKind::RightParen => self.parse_grouped_expression()?,
+            TokenKind::LeftParen => self.parse_grouped_expression()?,
             TokenKind::Switch => self.parse_switch()?,
+            TokenKind::If => self.parse_if_expression()?,
             TokenKind::Not => {
                 self.advance();
                 ExpressionKind::UnaryOp(
@@ -457,7 +499,14 @@ impl<'a> Parser<'a> {
                     Box::new(self._parse_expression(Precedence::Prefix)?),
                 )
             }
-            _ => todo!("Support {:?}", self.current.unwrap()),
+            kind => {
+                let span = self.current.unwrap().span;
+                return Err(ParseError::UnsupportedPrefix {
+                    span: (span.0, span.1 - span.0),
+                    src: self.source.get(self.cache),
+                    tok: kind,
+                });
+            }
         };
         let end = self.span();
 
@@ -530,10 +579,10 @@ impl<'a> Parser<'a> {
     fn parse_pattern(&mut self) -> ParseResult<Pattern> {
         let start = self.span();
         let kind = match self.current.unwrap().node {
-            TokenKind::Number => PatternKind::Integer(self.get_number()?),
+            TokenKind::NumberLiteral => PatternKind::Integer(self.get_number()?),
             TokenKind::True => PatternKind::Boolean(true),
             TokenKind::False => PatternKind::Boolean(false),
-            TokenKind::Char => PatternKind::Char(self.get_char()?),
+            TokenKind::CharLiteral => PatternKind::Char(self.get_char()?),
             _ => todo!("Support {:?}", self.current.unwrap()),
         };
         let end = self.span();
@@ -563,18 +612,48 @@ impl<'a> Parser<'a> {
 
             cases.push((pattern, stmt));
 
-            if self.current_is(TokenKind::Comma) {
+            if self.current_is(TokenKind::Semicolon) {
                 self.advance();
-            } else {
-                break;
             }
         }
-        println!("parsing cases {:?}", self.current);
         self.expect(TokenKind::RightCurlyBrace)?;
+        self.skip_semi();
 
         Ok(ExpressionKind::Switch {
             cases,
             target: Box::new(target),
+        })
+    }
+
+    fn parse_if_expression(&mut self) -> ParseResult<ExpressionKind> {
+        self.expect(TokenKind::If)?;
+        let cond = self.parse_expression()?;
+
+        println!("cond - {:?}", cond);
+
+        let then = self.parse_block_statement()?;
+
+        self.skip_semi();
+
+        let otherwise = if self.current_is(TokenKind::Else) {
+            self.advance();
+            if self.current_is(TokenKind::If) {
+                let expr = self.parse_expression()?;
+                Some(vec![Spanned::builder()
+                    .span(expr.span)
+                    .node(StatementKind::Expression(expr))
+                    .build()])
+            } else {
+                Some(self.parse_block_statement()?)
+            }
+        } else {
+            None
+        };
+
+        Ok(ExpressionKind::If {
+            cond: Box::new(cond),
+            then,
+            otherwise,
         })
     }
 
@@ -614,7 +693,7 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::LeftSquareBracket => {
                     self.advance();
-                    let size = if self.current_is(TokenKind::Number) {
+                    let size = if self.current_is(TokenKind::NumberLiteral) {
                         let num = self.get_number()?;
                         if num < 0 {
                             let s = self.current.unwrap().span;

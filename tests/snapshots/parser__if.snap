@@ -1,0 +1,149 @@
+---
+source: tests/parser.rs
+expression: program
+
+---
+- node:
+    Expression:
+      node:
+        If:
+          cond:
+            node:
+              BinOp:
+                - node:
+                    Boolean: true
+                  span:
+                    - 3
+                    - 11
+                - And
+                - node:
+                    BinOp:
+                      - node:
+                          BinOp:
+                            - node:
+                                Integer: 1
+                              span:
+                                - 13
+                                - 17
+                            - Equal
+                            - node:
+                                Integer: 1
+                              span:
+                                - 18
+                                - 22
+                        span:
+                          - 13
+                          - 22
+                      - Or
+                      - node:
+                          Boolean: false
+                        span:
+                          - 23
+                          - 29
+                  span:
+                    - 12
+                    - 31
+            span:
+              - 3
+              - 31
+          then:
+            - node:
+                Expression:
+                  node:
+                    Call:
+                      callee:
+                        node:
+                          Identifier:
+                            node: foo
+                            span:
+                              - 40
+                              - 43
+                        span:
+                          - 40
+                          - 44
+                      args: []
+                  span:
+                    - 40
+                    - 46
+              span:
+                - 40
+                - 51
+          otherwise:
+            - node:
+                Expression:
+                  node:
+                    If:
+                      cond:
+                        node:
+                          BinOp:
+                            - node:
+                                Integer: 2
+                              span:
+                                - 60
+                                - 63
+                            - Less
+                            - node:
+                                Integer: 3
+                              span:
+                                - 64
+                                - 67
+                        span:
+                          - 60
+                          - 67
+                      then:
+                        - node:
+                            Expression:
+                              node:
+                                Call:
+                                  callee:
+                                    node:
+                                      Identifier:
+                                        node: bar
+                                        span:
+                                          - 76
+                                          - 79
+                                    span:
+                                      - 76
+                                      - 80
+                                  args: []
+                              span:
+                                - 76
+                                - 82
+                          span:
+                            - 76
+                            - 87
+                      otherwise:
+                        - node:
+                            Expression:
+                              node:
+                                Call:
+                                  callee:
+                                    node:
+                                      Identifier:
+                                        node: baz
+                                        span:
+                                          - 103
+                                          - 106
+                                    span:
+                                      - 103
+                                      - 107
+                                  args: []
+                              span:
+                                - 103
+                                - 109
+                          span:
+                            - 103
+                            - 114
+                  span:
+                    - 57
+                    - 0
+              span:
+                - 57
+                - 0
+      span:
+        - 0
+        - 0
+  span:
+    - 0
+    - 0
+
