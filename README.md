@@ -1,3 +1,7 @@
+> 🚩 **This project is archived!** 🚩
+> 
+> *It was a cool project to start learning about interpreters, but ultimately didn't go anywhere*
+
 # sandstorm
 
 A WIP programming language in-between a systems and a general purpose programming language. Currently not usable whatsoever, but that should change in the coming months.
